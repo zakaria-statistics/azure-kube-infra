@@ -70,6 +70,19 @@ resource "azurerm_network_security_group" "nsg_sub1" {
     source_address_prefix      = "*"
     destination_address_prefix = var.subnet_cidrs.sub2_controlplane
   }
+
+  # Allow outbound to internet (for package updates, etc)
+  security_rule {
+    name                       = "allow-outbound-internet"
+    priority                   = 300
+    direction                  = "Outbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "Internet"
+  }
 }
 
 resource "azurerm_network_security_group" "nsg_sub2" {
@@ -77,7 +90,18 @@ resource "azurerm_network_security_group" "nsg_sub2" {
   location            = var.location
   resource_group_name = var.resource_group
 
-  # Allow API :6443 from Sub1 (kube bastion)
+  # Allow ssh and API :6443 from Sub1 (kube bastion)
+  security_rule {
+    name                       = "allow-ssh-from-sub1"
+    priority                   = 120
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = var.subnet_cidrs.sub1_bastion_kube
+    destination_address_prefix = "*"
+  }
   security_rule {
     name                       = "allow-apiserver-from-sub1"
     priority                   = 100
@@ -108,6 +132,19 @@ resource "azurerm_network_security_group" "nsg_sub3" {
   name                = "nsg-sub3-workers"
   location            = var.location
   resource_group_name = var.resource_group
+
+  # Allow ssh from Sub1 (kube bastion)
+  security_rule {
+    name                       = "allow-ssh-from-sub1"
+    priority                   = 120
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = var.subnet_cidrs.sub1_bastion_kube
+    destination_address_prefix = "*"
+  }
 
   # Let Azure LB reach NodePorts on workers
   security_rule {
@@ -151,7 +188,7 @@ resource "azurerm_network_security_group" "nsg_sub3" {
   # Allow access to internet (e.g., for image pulls)
   security_rule {
     name                       = "allow-outbound-internet"
-    priority                   = 100
+    priority                   = 400
     direction                  = "Outbound"
     access                     = "Allow"
     protocol                   = "*"
@@ -184,9 +221,9 @@ resource "azurerm_network_security_rule" "db_ssh_from_bastiondbs" {
 }
 
 resource "azurerm_network_security_rule" "db_ports_from_bastiondbs" {
-  for_each                    = toset(var.db_ports)
+  for_each                    = { for idx, p in var.db_ports : tostring(idx) => p }
   name                        = "allow-db-${each.value}-from-sub5"
-  priority                    = 200 + index(var.db_ports, each.value)
+  priority                    = 200 + tonumber(each.key)
   direction                   = "Inbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -199,9 +236,9 @@ resource "azurerm_network_security_rule" "db_ports_from_bastiondbs" {
 }
 
 resource "azurerm_network_security_rule" "db_ports_from_workers" {
-  for_each                    = toset(var.db_ports)
+  for_each                    = { for idx, p in var.db_ports : tostring(idx) => p }
   name                        = "allow-db-${each.value}-from-sub3"
-  priority                    = 300 + index(var.db_ports, each.value)
+  priority                    = 300 + tonumber(each.key)
   direction                   = "Inbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -228,6 +265,19 @@ resource "azurerm_network_security_group" "nsg_sub5" {
     destination_port_range     = "22"
     source_address_prefix      = var.dba_cidr
     destination_address_prefix = "*"
+  }
+
+  # Allow outbound to internet (for package updates, etc)
+  security_rule {
+    name                       = "allow-outbound-internet"
+    priority                   = 300
+    direction                  = "Outbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "Internet"
   }
 }
 

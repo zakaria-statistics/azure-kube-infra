@@ -1,0 +1,32 @@
+#cloud-config
+hostname: ${hostname}
+users:
+  - name: ${username}
+    ssh_authorized_keys:
+      - ${ssh_pubkey}
+    groups: [sudo]
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+ssh_pwauth: false
+disable_root: true
+
+package_update: true
+package_upgrade: true
+packages: [chrony, jq, curl]
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/99-hardening.conf
+    content: |
+      PasswordAuthentication no
+      PermitRootLogin no
+      PubkeyAuthentication yes
+      X11Forwarding no
+  - path: /etc/systemd/journald.conf.d/persistent.conf
+    content: |
+      [Journal]
+      Storage=persistent
+      SystemMaxUse=1G
+      MaxRetentionSec=30day
+
+runcmd:
+  - systemctl restart ssh
+  - systemctl enable --now chrony

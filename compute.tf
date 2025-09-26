@@ -84,16 +84,17 @@ resource "azurerm_linux_virtual_machine" "vm_bastion_kube" {
   resource_group_name   = var.resource_group
   location              = var.location
   size                  = var.vm_size_bastion
-  admin_username        = var.admin_username
   network_interface_ids = [azurerm_network_interface.nic_bastion_kube.id]
 
+  # required auth at provision time
+  admin_username                  = var.admin_username
+  disable_password_authentication = true
   admin_ssh_key {
     username   = var.admin_username
-    public_key = var.ssh_public_key
+    public_key = local.effective_ssh_pubkey
   }
 
   os_disk {
-    name                 = "${var.prefix}-osdisk"
     caching              = "ReadWrite"
     storage_account_type = "StandardSSD_LRS"
     disk_size_gb         = 32
@@ -102,9 +103,16 @@ resource "azurerm_linux_virtual_machine" "vm_bastion_kube" {
   source_image_reference {
     publisher = "Canonical"
     offer     = "0001-com-ubuntu-server-jammy"
-    sku       = "22_04-lts-gen2"
+    sku       = "22_04-lts"
     version   = "latest"
   }
+
+  custom_data = base64encode(templatefile("${path.module}/cloud-init/bastion-k8s.yml", {
+    hostname    = "bastion-kube"
+    username    = var.admin_username
+    ssh_pubkey  = local.effective_ssh_pubkey
+    ssh_privkey = indent(6, trimspace(local.effective_ssh_privkey))
+  }))
 }
 
 resource "azurerm_linux_virtual_machine" "vm_bastion_dbs" {
@@ -112,16 +120,17 @@ resource "azurerm_linux_virtual_machine" "vm_bastion_dbs" {
   resource_group_name   = var.resource_group
   location              = var.location
   size                  = var.vm_size_bastion
-  admin_username        = var.admin_username
   network_interface_ids = [azurerm_network_interface.nic_bastion_dbs.id]
 
+  # required auth at provision time
+  admin_username                  = var.admin_username
+  disable_password_authentication = true
   admin_ssh_key {
     username   = var.admin_username
-    public_key = var.ssh_public_key
+    public_key = local.effective_ssh_pubkey
   }
 
   os_disk {
-    name                 = "${var.prefix}-osdisk"
     caching              = "ReadWrite"
     storage_account_type = "StandardSSD_LRS"
     disk_size_gb         = 32
@@ -130,10 +139,20 @@ resource "azurerm_linux_virtual_machine" "vm_bastion_dbs" {
   source_image_reference {
     publisher = "Canonical"
     offer     = "0001-com-ubuntu-server-jammy"
-    sku       = "22_04-lts-gen2"
+    sku       = "22_04-lts"
     version   = "latest"
   }
+
+  custom_data = base64encode(
+    templatefile("${path.module}/cloud-init/db-bastion.yml", {
+      hostname   = "bastion-dbs"
+      username   = var.admin_username
+      ssh_pubkey = local.effective_ssh_pubkey
+      # keep PEM formatting: trim, then indent by 6 spaces to align under "content: |"
+      ssh_privkey = indent(6, trimspace(local.effective_ssh_privkey))
+  }))
 }
+
 
 resource "azurerm_linux_virtual_machine" "vm_cp" {
   count                 = var.cp_count
@@ -141,26 +160,34 @@ resource "azurerm_linux_virtual_machine" "vm_cp" {
   resource_group_name   = var.resource_group
   location              = var.location
   size                  = var.vm_size_cp
-  admin_username        = var.admin_username
   network_interface_ids = [azurerm_network_interface.nic_cp[count.index].id]
 
+  # required auth at provision time
+  admin_username                  = var.admin_username
+  disable_password_authentication = true
   admin_ssh_key {
     username   = var.admin_username
-    public_key = var.ssh_public_key
+    public_key = local.effective_ssh_pubkey
   }
+
   os_disk {
-    name                 = "${var.prefix}-osdisk"
     caching              = "ReadWrite"
     storage_account_type = "StandardSSD_LRS"
-    disk_size_gb         = 32
+    disk_size_gb         = 64
   }
 
   source_image_reference {
     publisher = "Canonical"
     offer     = "0001-com-ubuntu-server-jammy"
-    sku       = "22_04-lts-gen2"
+    sku       = "22_04-lts"
     version   = "latest"
   }
+
+  custom_data = base64encode(templatefile("${path.module}/cloud-init/k8s.yml", {
+    hostname   = format("cp-%02d", count.index)
+    username   = var.admin_username
+    ssh_pubkey = local.effective_ssh_pubkey
+  }))
 }
 
 resource "azurerm_linux_virtual_machine" "vm_worker" {
@@ -169,15 +196,17 @@ resource "azurerm_linux_virtual_machine" "vm_worker" {
   resource_group_name   = var.resource_group
   location              = var.location
   size                  = var.vm_size_worker
-  admin_username        = var.admin_username
   network_interface_ids = [azurerm_network_interface.nic_worker[count.index].id]
 
+  # required auth at provision time
+  admin_username                  = var.admin_username
+  disable_password_authentication = true
   admin_ssh_key {
     username   = var.admin_username
-    public_key = var.ssh_public_key
+    public_key = local.effective_ssh_pubkey
   }
+
   os_disk {
-    name                 = "${var.prefix}-osdisk"
     caching              = "ReadWrite"
     storage_account_type = "StandardSSD_LRS"
     disk_size_gb         = 32
@@ -186,9 +215,15 @@ resource "azurerm_linux_virtual_machine" "vm_worker" {
   source_image_reference {
     publisher = "Canonical"
     offer     = "0001-com-ubuntu-server-jammy"
-    sku       = "22_04-lts-gen2"
+    sku       = "22_04-lts"
     version   = "latest"
   }
+
+  custom_data = base64encode(templatefile("${path.module}/cloud-init/k8s.yml", {
+    hostname   = format("worker-%02d", count.index)
+    username   = var.admin_username
+    ssh_pubkey = local.effective_ssh_pubkey
+  }))
 }
 
 resource "azurerm_linux_virtual_machine" "vm_db" {
@@ -197,24 +232,32 @@ resource "azurerm_linux_virtual_machine" "vm_db" {
   resource_group_name   = var.resource_group
   location              = var.location
   size                  = var.vm_size_db
-  admin_username        = var.admin_username
   network_interface_ids = [azurerm_network_interface.nic_db[count.index].id]
 
+  # required auth at provision time
+  admin_username                  = var.admin_username
+  disable_password_authentication = true
   admin_ssh_key {
     username   = var.admin_username
-    public_key = var.ssh_public_key
+    public_key = local.effective_ssh_pubkey
   }
+
   os_disk {
-    name                 = "${var.prefix}-osdisk"
     caching              = "ReadWrite"
     storage_account_type = "StandardSSD_LRS"
-    disk_size_gb         = 32
+    disk_size_gb         = 64
   }
 
   source_image_reference {
     publisher = "Canonical"
     offer     = "0001-com-ubuntu-server-jammy"
-    sku       = "22_04-lts-gen2"
+    sku       = "22_04-lts"
     version   = "latest"
   }
+
+  custom_data = base64encode(templatefile("${path.module}/cloud-init/db-vm.yml", {
+    hostname   = format("db-%02d", count.index)
+    username   = var.admin_username
+    ssh_pubkey = local.effective_ssh_pubkey
+  }))
 }

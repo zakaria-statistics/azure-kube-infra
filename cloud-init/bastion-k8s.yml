@@ -1,0 +1,63 @@
+#cloud-config
+hostname: ${hostname}
+users:
+  - name: ${username}
+    ssh_authorized_keys:
+      - ${ssh_pubkey}
+    groups: [sudo]
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+ssh_pwauth: false
+disable_root: true
+
+package_update: true
+package_upgrade: true
+packages:
+  - fail2ban
+  - chrony
+  - htop
+  - jq
+  - git
+  - tmux
+  - net-tools
+  - unzip
+  - curl
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/99-hardening.conf
+    content: |
+      PasswordAuthentication no
+      PermitRootLogin no
+      PubkeyAuthentication yes
+      ChallengeResponseAuthentication no
+      KbdInteractiveAuthentication no
+      X11Forwarding no
+      AllowTcpForwarding yes
+      AllowAgentForwarding no
+      ClientAliveInterval 300
+      ClientAliveCountMax 2
+      LoginGraceTime 20
+  - path: /etc/systemd/journald.conf.d/persistent.conf
+    content: |
+      [Journal]
+      Storage=persistent
+      SystemMaxUse=1G
+      MaxRetentionSec=30day
+  
+  # kube bastion private key (PEM) — used to SSH into db-* VMs
+  - path: /home/${username}/.ssh/id_ed25519_kube
+    permissions: "0600"
+    content: |
+      ${ssh_privkey}
+
+runcmd:
+  - install -m 700 -o ${username} -g ${username} -d /home/${username}/.ssh
+  - chown -R ${username}:${username} /home/${username}/.ssh
+  - chmod 700 /home/${username}/.ssh
+  - chmod 600 /home/${username}/.ssh/*
+  - systemctl restart ssh
+  - systemctl enable --now chrony
+  # optional: lightweight host firewall on bastions only
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22/tcp
+  - ufw --force enable

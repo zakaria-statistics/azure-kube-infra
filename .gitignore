@@ -18,9 +18,15 @@ crash.log
 
 # SSH keys
 id_rsa*
+id_ed*
 
 # Editor/OS files
 *.swp
 *.swo
 *.DS_Store
 Thumbs.db
+
+# Local IDE files
+.vscode/
+lab/vault.sh
+plan*

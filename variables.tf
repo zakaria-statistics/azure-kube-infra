@@ -1,31 +1,31 @@
 # variables.tf
-variable "subscription_id" {
-  type = string
-}
+# variable "subscription_id" {
+#   type = string
+# }
+# variable "client_id" {
+#   type = string
+# }
+# variable "client_secret" {
+#   type      = string
+#   sensitive = true
+# }
+# variable "tenant_id" {
+#   type = string
+# }
 
-variable "client_id" {
-  type = string
-}
 
-variable "client_secret" {
-  type      = string
-  sensitive = true
-}
-
-variable "tenant_id" {
-  type = string
-}
-variable "prefix" { type = string }
 variable "location" {
   type = string
 }
 variable "resource_group" {
   type = string
 }
-variable "location" { default = "westeurope" }
-variable "vnet_cidr" { default = "10.20.0.0/16" }
 
-# Subnets (change if you like)
+
+variable "vnet_cidr" {
+  type    = string
+  default = "10.20.0.0/16"
+}
 variable "subnet_cidrs" {
   type = object({
     sub1_bastion_kube = string
@@ -46,11 +46,13 @@ variable "subnet_cidrs" {
 # Access / ports
 variable "admin_cidr" {
   description = "CIDR allowed to SSH to kube bastion"
-  default     = "172.16.10.0/24"
+  #default     = "196.115.99.85/32"
+  default = "0.0.0.0/0"
 }
 variable "dba_cidr" {
   description = "CIDR allowed to SSH to DB bastion"
-  default     = "172.16.20.0/24"
+  #default     = "196.115.99.85/32"
+  default = "0.0.0.0/0"
 }
 variable "db_ports" {
   description = "DB ports to allow from bastion/workers"
@@ -63,10 +65,18 @@ variable "nodeport_range" {
 }
 
 # Compute
-variable "admin_username" { default = "azureuser" }
+variable "admin_username" {
+  default = "azureuser"
+}
 variable "ssh_public_key" {
-  description = "Your SSH public key"
-  type        = string
+  type    = string
+  default = null
+}
+
+variable "ssh_private_key" {
+  type      = string
+  default   = null
+  sensitive = true
 }
 
 variable "cp_count" { default = 1 }
@@ -75,7 +85,23 @@ variable "db_count" { default = 2 }
 
 # Sizes
 variable "vm_size_bastion" { default = "Standard_B1ms" }
-variable "vm_size_cp" { default = "Standard_B2s" }
-variable "vm_size_worker" { default = "Standard_B2s" }
+variable "vm_size_cp" { default = "Standard_A2_v2" }
+variable "vm_size_worker" { default = "Standard_A2_v2" }
 variable "vm_size_db" { default = "Standard_B2ms" }
+
+
+# ================= Vault =================
+variable "vault_addr" {
+  type = string
+}
+variable "vault_role_id" {
+  type = string
+}
+variable "vault_secret_id" {
+  type      = string
+  sensitive = true
+}
+
+variable "vault_kv_mount" { default = "kv" }
+variable "vault_ssh_path" { default = "cloud/ssh/kube" }
 

@@ -1,0 +1,38 @@
+#cloud-config
+hostname: ${hostname}
+users:
+  - name: ${username}
+    ssh_authorized_keys:
+      - ${ssh_pubkey}
+    groups: [sudo]
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+ssh_pwauth: false
+disable_root: true
+
+package_update: true
+package_upgrade: true
+packages: [chrony, curl, apt-transport-https, ca-certificates]
+
+write_files:
+  - path: /etc/modules-load.d/k8s.conf
+    content: |
+      br_netfilter
+  - path: /etc/sysctl.d/99-k8s.conf
+    content: |
+      net.bridge.bridge-nf-call-iptables=1
+      net.bridge.bridge-nf-call-ip6tables=1
+      net.ipv4.ip_forward=1
+  - path: /etc/systemd/journald.conf.d/persistent.conf
+    content: |
+      [Journal]
+      Storage=persistent
+      SystemMaxUse=1G
+      MaxRetentionSec=30day
+
+runcmd:
+  - modprobe br_netfilter || true
+  - sysctl --system
+  - swapoff -a
+  - sed -ri 's/(^.*\sswap\s.*$)/# \1/' /etc/fstab
+  - systemctl enable --now chrony
+  # DO NOT enable ufw here; NSGs already protect these nodes
