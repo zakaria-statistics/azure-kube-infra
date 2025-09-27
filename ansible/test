@@ -1,0 +1,11 @@
+cat > /tmp/inventory <<'EOF'
+[k8s_cp]
+10.20.2.4 ansible_user=azureuser
+
+[k8s_workers]
+10.20.3.4 ansible_user=azureuser
+10.20.3.5 ansible_user=azureuser
+EOF
+
+ansible -i /tmp/inventory k8s_cp,k8s_workers -m ping \
+  -e 'ansible_ssh_common_args=-o StrictHostKeyChecking=accept-new'

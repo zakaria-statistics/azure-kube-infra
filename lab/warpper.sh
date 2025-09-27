@@ -36,4 +36,7 @@ exec env \
   ARM_SUBSCRIPTION_ID="$ARM_SUBSCRIPTION_ID" \
   ARM_CLIENT_ID="$ARM_CLIENT_ID" \
   ARM_CLIENT_SECRET="$ARM_CLIENT_SECRET" \
+  TF_VAR_vault_addr="$VAULT_ADDR" \
+  TF_VAR_vault_role_id="$VAULT_ROLE_ID" \
+  TF_VAR_vault_secret_id="$VAULT_SECRET_ID" \
   "$TF_BIN" "$@"

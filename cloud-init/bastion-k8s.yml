@@ -12,15 +12,20 @@ disable_root: true
 package_update: true
 package_upgrade: true
 packages:
+  - software-properties-common
+  - python3
+  - python3-venv
+  - python3-pip
+  - rsync
+  - git
+  - jq
+  - net-tools
+  - curl
   - fail2ban
   - chrony
   - htop
-  - jq
-  - git
   - tmux
-  - net-tools
   - unzip
-  - curl
 
 write_files:
   - path: /etc/ssh/sshd_config.d/99-hardening.conf
@@ -48,6 +53,53 @@ write_files:
     permissions: "0600"
     content: |
       ${ssh_privkey}
+  
+  # SSH config for bastion user for workers
+  - path: /home/${username}/.ssh/config
+    permissions: "0600"
+    content: |
+      Host 10.20.3.*
+        User ${username}
+        IdentityFile /home/${username}/.ssh/id_ed25519_kube
+        IdentitiesOnly yes
+        StrictHostKeyChecking accept-new
+
+   # SSH config for bastion user for cp
+  - path: /home/${username}/.ssh/config
+    permissions: "0600"
+    append: true
+    content: |
+      Host 10.20.2.*
+        User ${username}
+        IdentityFile /home/${username}/.ssh/id_ed25519_kube
+        IdentitiesOnly yes
+        StrictHostKeyChecking accept-new
+
+  # --- Added: make Ansible venv available in PATH for all users ---
+  - path: /etc/profile.d/ansible.sh
+    permissions: "0644"
+    content: |
+      if [ -d /opt/ansible/bin ]; then
+        export PATH="/opt/ansible/bin:$PATH"
+      fi
+  
+  # Clobal ansible cfg (system-wide)
+  - path: /etc/ansible/ansible.cfg
+    permissions: "0644"
+    content: |
+      [defaults]
+      # Standard to any repo
+      host_key_checking = False
+      stdout_callback = yaml
+      retry_files_enabled = False
+      deprecation_warnings = False
+      interpreter_python = auto
+
+      # Global fact caching (if enabled in playbooks)
+      fact_caching = jsonfile
+      fact_caching_connection = /var/cache/ansible/facts
+      fact_caching_timeout = 86400
+
 
 runcmd:
   - install -m 700 -o ${username} -g ${username} -d /home/${username}/.ssh
@@ -56,8 +108,24 @@ runcmd:
   - chmod 600 /home/${username}/.ssh/*
   - systemctl restart ssh
   - systemctl enable --now chrony
+
   # optional: lightweight host firewall on bastions only
   - ufw default deny incoming
   - ufw default allow outgoing
   - ufw allow 22/tcp
   - ufw --force enable
+
+  # Create Ansible venv and install Ansible
+  - python3 -m venv /opt/ansible
+  - /opt/ansible/bin/pip install --upgrade pip
+  - /opt/ansible/bin/pip install "ansible>=9,<10" ansible-lint jinja2-cli[yaml]
+
+  # Create ~/.ansible/tmp with correct ownership & perms (prevents permission denied)
+  - install -d -m 700 -o ${username} -g ${username} /home/${username}/.ansible
+  - install -d -m 700 -o ${username} -g ${username} /home/${username}/.ansible/tmp
+
+  # Create cache dir for fact caching (if enabled in ansible.cfg)
+  - install -d -m 700 -o ${username} -g ${username} /var/cache/ansible/facts
+
+  # Sanity: show versions (non-blocking)
+  - bash -lc 'echo PATH=$PATH; which ansible || /opt/ansible/bin/ansible --version || true'
